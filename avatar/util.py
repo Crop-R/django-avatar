@@ -5,6 +5,12 @@ from django.utils import six
 from django.template.defaultfilters import slugify
 
 try:
+    from urllib.parse import urljoin, urlencode
+except ImportError:
+    from urlparse import urljoin
+    from urllib import urlencode
+
+try:
     from django.utils.encoding import force_bytes
 except ImportError:
     force_bytes = str
@@ -129,3 +135,24 @@ def get_primary_avatar(user, size=settings.AVATAR_DEFAULT_SIZE):
         if not avatar.thumbnail_exists(size):
             avatar.create_thumbnail(size)
     return avatar
+
+def get_primary_avatar_url(user, size=settings.AVATAR_DEFAULT_SIZE):
+    avatar = get_primary_avatar(user, size=size)
+    if avatar:
+        # FIXME: later, add an option to render the resized avatar dynamically
+        # instead of redirecting to an already created static file. This could
+        # be useful in certain situations, particulary if there is a CDN and
+        # we want to minimize the storage usage on our static server, letting
+        # the CDN store those files instead
+        url = avatar.avatar_url(size)
+    elif settings.AVATAR_GRAVATAR_BACKUP:
+        params = {'s': str(size)}
+        if settings.AVATAR_GRAVATAR_DEFAULT:
+            params['d'] = settings.AVATAR_GRAVATAR_DEFAULT
+        path = "%s/?%s" % (hashlib.md5(force_bytes(user.email)).hexdigest(),
+                           urlencode(params))
+        url = urljoin(settings.AVATAR_GRAVATAR_BASE_URL, path)
+    else:
+        url = get_default_avatar_url()
+
+    return url
